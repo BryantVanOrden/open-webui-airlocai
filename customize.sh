@@ -19,10 +19,10 @@ echo_message "  - AirlocAI/static/logo.png"
 
 # This part of the script will copy the files.
 # Make sure you have an 'AirlocAI' directory with your images at the same level as your 'open-webui-airlocai' directory
-cp ../AirlocAI/static/favicon.png open-webui-airlocai/static/
-cp ../AirlocAI/static/favicon-dark.png open-webui-airlocai/static/
-cp ../AirlocAI/static/splash.png open-webui-airlocai/static/
-cp ../AirlocAI/static/logo.png open-webui-airlocai/static/
+cp ../AirlocAI/static/favicon.png static/
+cp ../AirlocAI/static/favicon-dark.png static/
+cp ../AirlocAI/static/splash.png static/
+cp ../AirlocAI/static/logo.png static/
 
 echo_message "Logo files have been updated."
 
@@ -53,13 +53,13 @@ sed -i '/{:else if tabId === '"'about'"'}/{
 
 # 3.4 General.svelte: Remove commented-out themes
 sed -i '/<option value="her">🌷 Her<\/option>/{
-    N;N;N;d
+    N;N;d
 }' src/lib/components/chat/Settings/General.svelte
 
 # 3.5 UserMenu.svelte: Remove "Documentation" and change "Releases"
-sed -i '/<DropdownMenu.Item/{
-    N;N;N;N;N;N;N;N;N;N;N;N;d
-}' src/lib/components/layout/Sidebar/UserMenu.svelte
+# sed -i '/<DropdownMenu.Item/{
+#     N;N;N;N;N;N;N;N;N;N;N;N;d
+# }' src/lib/components/layout/Sidebar/UserMenu.svelte
 
 sed -i "s|href=\"https://github.com/open-webui/open-webui/releases\"|href=\"https://AirlocAI.com\"|g" src/lib/components/layout/Sidebar/UserMenu.svelte
 sed -i "s|{$i18n.t('Releases')}|{$i18n.t('AirlocAI')}|g" src/lib/components/layout/Sidebar/UserMenu.svelte
