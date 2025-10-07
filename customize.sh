@@ -26,37 +26,43 @@ cp ../AirlocAI/static/logo.png static/
 
 echo_message "Logo files have been updated."
 
-# 2. Replace "Open Web UI" with "AirlocAI"
-echo_message "Replacing all instances of 'Open Web UI' with 'AirlocAI'..."
-find . -type f -name "*.svelte" -o -name "*.ts" -o -name "*.html" | xargs sed -i 's/Open Web UI/AirlocAI/g'
+# 2. Replace "Open Web UI" and "Open WebUI" with "AirlocAI"
+echo_message "Replacing all instances of 'Open Web UI' and 'Open WebUI' with 'AirlocAI'..."
+find . -type f \( -name "*.svelte" -o -name "*.ts" -o -name "*.html" -o -name "*.py" -o -name "*.md" -o -name "*.yaml" \) -print0 | xargs -0 sed -i 's/Open Web UI/AirlocAI/g'
+find . -type f \( -name "*.svelte" -o -name "*.ts" -o -name "*.html" -o -name "*.py" -o -name "*.md" -o -name "*.yaml" \) -print0 | xargs -0 sed -i 's/Open WebUI/AirlocAI/g'
 
-# 3. Remove sections from .svelte files
+# 3. Fix the missing </div> tag in General.svelte
+# echo_message "Fixing the missing </div> tag in src/lib/components/admin/Settings/General.svelte..."
+# sed -i '/<div class="flex justify-end pt-3 text-sm font-medium">/i </div>' src/lib/components/admin/Settings/General.svelte
+
+
+# 4. Remove sections from .svelte files
 
 echo_message "Removing specified sections from .svelte files..."
 
-# 3.1 General.svelte: Remove Version, Help, and License sections
+# 4.1 General.svelte: Remove Version, Help, and License sections
 sed -i '/<div class="mb-2.5">/{
     N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;d
 }' src/lib/components/chat/Settings/General.svelte
 
 
-# 3.2 UserList.svelte: Remove "Hey there! 👋"
+# 4.2 UserList.svelte: Remove "Hey there! 👋"
 sed -i '/{#if !\$config?.license_metadata}/{
     N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;d
 }' src/lib/components/admin/Users/UserList.svelte
 
 
-# 3.3 settingModal.svelte: Remove "About" tab
+# 4.3 settingModal.svelte: Remove "About" tab
 sed -i '/{:else if tabId === '"'about'"'}/{
     N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;d
 }' src/lib/components/chat/SettingsModal.svelte
 
-# 3.4 General.svelte: Remove commented-out themes
+# 4.4 General.svelte: Remove commented-out themes
 sed -i '/<option value="her">🌷 Her<\/option>/{
     N;N;d
 }' src/lib/components/chat/Settings/General.svelte
 
-# 3.5 UserMenu.svelte: Remove "Documentation" and change "Releases"
+# 4.5 UserMenu.svelte: Remove "Documentation" and change "Releases"
 # sed -i '/<DropdownMenu.Item/{
 #     N;N;N;N;N;N;N;N;N;N;N;N;d
 # }' src/lib/components/layout/Sidebar/UserMenu.svelte
