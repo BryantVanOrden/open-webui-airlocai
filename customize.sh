@@ -53,9 +53,9 @@ sed -i '/{#if !\$config?.license_metadata}/{
 
 
 # 4.3 settingModal.svelte: Remove "About" tab
-sed -i '/{:else if tabId === '"'about'"'}/{
+sed -i "/{:else if tabId === 'about'}/{
     N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;d
-}' src/lib/components/chat/SettingsModal.svelte
+}" src/lib/components/chat/SettingsModal.svelte
 
 # 4.4 General.svelte: Remove commented-out themes
 sed -i '/<option value="her">🌷 Her<\/option>/{
@@ -241,11 +241,170 @@ DEFAULT_CONFIG = {
 EOF
 
 # 5.2 Replace DEFAULT_CONFIG in config.py
-sed -i "/^DEFAULT_CONFIG = {/,/}$/c\\$(cat new_config.py)" backend/open_webui/config.py
+# Use awk for a more reliable replacement of the multi-line block
+awk '
+  BEGIN {
+    # Read the new config into a variable
+    while ((getline line < "new_config.py") > 0) {
+      new_config = new_config line "\n"
+    }
+    close("new_config.py")
+    sub(/\n$/, "", new_config) # Remove trailing newline
+  }
+  
+  # Find the start of the DEFAULT_CONFIG block
+  /^DEFAULT_CONFIG = \{/ {
+    print new_config
+    in_block=1
+    brace_count=1
+    next
+  }
+
+  # If inside the block, count braces to find the end
+  in_block {
+    # Process the line to count braces
+    for (i=1; i<=length($0); i++) {
+      char = substr($0, i, 1)
+      if (char == "{") brace_count++
+      if (char == "}") brace_count--
+    }
+    
+    # If brace_count is zero, we found the end of the block
+    if (brace_count == 0) {
+      in_block=0
+    }
+    next
+  }
+  
+  # Print lines outside the block
+  !in_block {
+    print
+  }
+' backend/open_webui/config.py > tmp_config.py && mv tmp_config.py backend/open_webui/config.py
+
 rm new_config.py
 
 # 5.3 Set default advanced model parameters
-sed -i "s/class ModelForm(ModelModel):/class ModelForm(ModelModel):\n    params: dict = {\n        \"stream_response\": True,\n        \"stream_delta_chunk_size\": 5,\n        \"max_tokens\": 45000,\n        \"num_thread\": 8,\n        \"num_gpu\": 10,\n        \"num_batch\": 1024,\n        \"num_ctx\": 60000,\n        \"reasoning_effort\": \"high\"\n    }/" backend/open_webui/models/models.py
+# Using a temp file and sed to insert the text after the class definition
+MODEL_PARAMS_FILE="model_params.txt"
+cat << 'EOF' > ${MODEL_PARAMS_FILE}
+    params: dict = {
+        "stream_response": True,
+        "stream_delta_chunk_size": 5,
+        "max_tokens": 45000,
+        "num_thread": 8,
+        "num_gpu": 10,
+        "num_batch": 1024,
+        "num_ctx": 60000,
+        "reasoning_effort": "high"
+    }
+EOF
+
+# Use awk to insert the model parameters after the class definition
+awk '
+  /class ModelForm\(ModelModel\):/ {
+    print
+    while ((getline line < "model_params.txt") > 0) print line
+    close("model_params.txt")
+    next
+  }
+  { print }
+' backend/open_webui/models/models.py > tmp_models.py && mv tmp_models.py backend/open_webui/models/models.py
+rm ${MODEL_PARAMS_FILE}
 
 
+# 6. Authentication Setup
+echo_message "Configuring authentication method..."
+
+# Create or clear the .env file
+ENV_FILE=".env"
+> "${ENV_FILE}"
+echo_message "Created a fresh .env file."
+
+echo "Select your authentication method:"
+echo "  1) Standard email and password"
+echo "  2) Google (OAuth)"
+echo "  3) Microsoft Azure AD (OAuth)"
+echo "  4) Okta / Generic OIDC (OAuth)"
+echo "  5) Active Directory (LDAP)"
+
+read -p "Enter your choice [1-5]: " auth_choice
+
+case ${auth_choice} in
+  1)
+    echo_message "Setting up standard password authentication."
+    echo "ENABLE_OAUTH_SIGNUP=False" >> "${ENV_FILE}"
+    echo "ENABLE_LDAP=False" >> "${ENV_FILE}"
+    ;;
+  2)
+    echo_message "Setting up Google OAuth."
+    echo "ENABLE_OAUTH_SIGNUP=True" >> "${ENV_FILE}"
+    read -p "Enter your Google Client ID: " GOOGLE_CLIENT_ID
+    read -p "Enter your Google Client Secret: " GOOGLE_CLIENT_SECRET
+    read -p "Enter your Google Redirect URI (e.g., http://localhost:3000/api/v1/auths/sso/callback/google): " GOOGLE_REDIRECT_URI
+    read -p "Enter allowed domains for signup (comma-separated, e.g., company.com,another.com): " OAUTH_ALLOWED_DOMAINS
+
+    echo "GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}" >> "${ENV_FILE}"
+    echo "GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}" >> "${ENV_FILE}"
+    echo "GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}" >> "${ENV_FILE}"
+    echo "OAUTH_ALLOWED_DOMAINS=${OAUTH_ALLOWED_DOMAINS}" >> "${ENV_FILE}"
+    ;;
+  3)
+    echo_message "Setting up Microsoft Azure AD OAuth."
+    echo "ENABLE_OAUTH_SIGNUP=True" >> "${ENV_FILE}"
+    read -p "Enter your Microsoft Client ID: " MICROSOFT_CLIENT_ID
+    read -p "Enter your Microsoft Client Secret: " MICROSOFT_CLIENT_SECRET
+    read -p "Enter your Microsoft Tenant ID: " MICROSOFT_CLIENT_TENANT_ID
+    read -p "Enter your Microsoft Redirect URI (e.g., http://localhost:3000/api/v1/auths/sso/callback/microsoft): " MICROSOFT_REDIRECT_URI
+    read -p "Enter allowed domains for signup (comma-separated): " OAUTH_ALLOWED_DOMAINS
+
+    echo "MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID}" >> "${ENV_FILE}"
+    echo "MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET}" >> "${ENV_FILE}"
+    echo "MICROSOFT_CLIENT_TENANT_ID=${MICROSOFT_CLIENT_TENANT_ID}" >> "${ENV_FILE}"
+    echo "MICROSOFT_REDIRECT_URI=${MICROSOFT_REDIRECT_URI}" >> "${ENV_FILE}"
+    echo "OAUTH_ALLOWED_DOMAINS=${OAUTH_ALLOWED_DOMAINS}" >> "${ENV_FILE}"
+    ;;
+  4)
+    echo_message "Setting up Generic OIDC (e.g., Okta)."
+    echo "ENABLE_OAUTH_SIGNUP=True" >> "${ENV_FILE}"
+    read -p "Enter the provider name for the login button (e.g., Okta): " OAUTH_PROVIDER_NAME
+    read -p "Enter your OIDC Provider URL (discovery URL): " OPENID_PROVIDER_URL
+    read -p "Enter your OIDC Client ID: " OAUTH_CLIENT_ID
+    read -p "Enter your OIDC Client Secret: " OAUTH_CLIENT_SECRET
+    read -p "Enter your OIDC Redirect URI (e.g., http://localhost:3000/api/v1/auths/sso/callback/oidc): " OPENID_REDIRECT_URI
+    read -p "Enter allowed domains for signup (comma-separated): " OAUTH_ALLOWED_DOMAINS
+
+    echo "OAUTH_PROVIDER_NAME=${OAUTH_PROVIDER_NAME}" >> "${ENV_FILE}"
+    echo "OPENID_PROVIDER_URL=${OPENID_PROVIDER_URL}" >> "${ENV_FILE}"
+    echo "OAUTH_CLIENT_ID=${OAUTH_CLIENT_ID}" >> "${ENV_FILE}"
+    echo "OAUTH_CLIENT_SECRET=${OAUTH_CLIENT_SECRET}" >> "${ENV_FILE}"
+    echo "OPENID_REDIRECT_URI=${OPENID_REDIRECT_URI}" >> "${ENV_FILE}"
+    echo "OAUTH_ALLOWED_DOMAINS=${OAUTH_ALLOWED_DOMAINS}" >> "${ENV_FILE}"
+    ;;
+  5)
+    echo_message "Setting up LDAP for Active Directory."
+    echo "ENABLE_LDAP=True" >> "${ENV_FILE}"
+    read -p "Enter LDAP Server Host: " LDAP_SERVER_HOST
+    read -p "Enter LDAP Server Port [389]: " LDAP_SERVER_PORT
+    LDAP_SERVER_PORT=${LDAP_SERVER_PORT:-389}
+    read -p "Use TLS? (True/False) [True]: " LDAP_USE_TLS
+    LDAP_USE_TLS=${LDAP_USE_TLS:-True}
+    read -p "Enter LDAP App DN (service account): " LDAP_APP_DN
+    read -s -p "Enter LDAP App Password: " LDAP_APP_PASSWORD
+    echo
+    read -p "Enter LDAP Search Base (e.g., ou=users,dc=company,dc=com): " LDAP_SEARCH_BASE
+    
+    echo "LDAP_SERVER_HOST=${LDAP_SERVER_HOST}" >> "${ENV_FILE}"
+    echo "LDAP_SERVER_PORT=${LDAP_SERVER_PORT}" >> "${ENV_FILE}"
+    echo "LDAP_USE_TLS=${LDAP_USE_TLS}" >> "${ENV_FILE}"
+    echo "LDAP_APP_DN=${LDAP_APP_DN}" >> "${ENV_FILE}"
+    echo "LDAP_APP_PASSWORD=${LDAP_APP_PASSWORD}" >> "${ENV_FILE}"
+    echo "LDAP_SEARCH_BASE=${LDAP_SEARCH_BASE}" >> "${ENV_FILE}"
+    ;;
+  *)
+    echo_message "Invalid choice. Skipping authentication setup."
+    ;;
+esac
+
+echo_message "Authentication setup complete."
 echo_message "Customization complete! Now, build and conquer."
