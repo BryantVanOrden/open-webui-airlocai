@@ -90,6 +90,26 @@
 		}
 	);
 
+	const updateFuse = () => {
+		if (fuse) {
+			fuse.setCollection(
+				items.map((item) => {
+					const _item = {
+						...item,
+						modelName: item.model?.name,
+						tags: (item.model?.tags ?? []).map((tag) => tag.name).join(' '),
+						desc: item.model?.info?.meta?.description
+					};
+					return _item;
+				})
+			);
+		}
+	};
+
+	$: if (items) {
+		updateFuse();
+	}
+
 	$: filteredItems = (
 		searchValue
 			? fuse
@@ -101,7 +121,10 @@
 						if (selectedTag === '') {
 							return true;
 						}
-						return (item.model?.tags ?? []).map((tag) => tag.name).includes(selectedTag);
+
+						return (item.model?.tags ?? [])
+							.map((tag) => tag.name.toLowerCase())
+							.includes(selectedTag.toLowerCase());
 					})
 					.filter((item) => {
 						if (selectedConnectionType === '') {
@@ -119,7 +142,9 @@
 						if (selectedTag === '') {
 							return true;
 						}
-						return (item.model?.tags ?? []).map((tag) => tag.name).includes(selectedTag);
+						return (item.model?.tags ?? [])
+							.map((tag) => tag.name.toLowerCase())
+							.includes(selectedTag.toLowerCase());
 					})
 					.filter((item) => {
 						if (selectedConnectionType === '') {
@@ -295,8 +320,7 @@
 			tags = items
 				.filter((item) => !(item.model?.info?.meta?.hidden ?? false))
 				.flatMap((item) => item.model?.tags ?? [])
-				.map((tag) => tag.name);
-
+				.map((tag) => tag.name.toLowerCase());
 			// Remove duplicates and sort
 			tags = Array.from(new Set(tags)).sort((a, b) => a.localeCompare(b));
 		}
@@ -337,6 +361,18 @@
 			);
 		}
 	};
+
+	const ITEM_HEIGHT = 42;
+	const OVERSCAN = 10;
+
+	let listScrollTop = 0;
+	let listContainer;
+
+	$: visibleStart = Math.max(0, Math.floor(listScrollTop / ITEM_HEIGHT) - OVERSCAN);
+	$: visibleEnd = Math.min(
+		filteredItems.length,
+		Math.ceil((listScrollTop + 256) / ITEM_HEIGHT) + OVERSCAN
+	);
 </script>
 
 <DropdownMenu.Root
@@ -520,29 +556,43 @@
 				{/if}
 			</div>
 
-			<div class="px-2.5 max-h-64 overflow-y-auto group relative">
-				{#each filteredItems as item, index}
-					<ModelItem
-						{selectedModelIdx}
-						{item}
-						{index}
-						{value}
-						{pinModelHandler}
-						{unloadModelHandler}
-						onClick={() => {
-							value = item.value;
-							selectedModelIdx = index;
-
-							show = false;
-						}}
-					/>
-				{:else}
+			<div class="px-2.5 group relative">
+				{#if filteredItems.length === 0}
 					<div class="">
 						<div class="block px-3 py-2 text-sm text-gray-700 dark:text-gray-100">
 							{$i18n.t('No results found')}
 						</div>
 					</div>
-				{/each}
+				{:else}
+					<!-- svelte-ignore a11y-no-static-element-interactions -->
+					<div
+						class="max-h-64 overflow-y-auto"
+						bind:this={listContainer}
+						on:scroll={() => {
+							listScrollTop = listContainer.scrollTop;
+						}}
+					>
+						<div style="height: {visibleStart * ITEM_HEIGHT}px;" />
+						{#each filteredItems.slice(visibleStart, visibleEnd) as item, i (item.value)}
+							{@const index = visibleStart + i}
+							<ModelItem
+								{selectedModelIdx}
+								{item}
+								{index}
+								{value}
+								{pinModelHandler}
+								{unloadModelHandler}
+								onClick={() => {
+									value = item.value;
+									selectedModelIdx = index;
+
+									show = false;
+								}}
+							/>
+						{/each}
+						<div style="height: {(filteredItems.length - visibleEnd) * ITEM_HEIGHT}px;" />
+					</div>
+				{/if}
 
 				{#if !(searchValue.trim() in $MODEL_DOWNLOAD_POOL) && searchValue && ollamaVersion && $user?.role === 'admin'}
 					<Tooltip
